@@ -85,7 +85,60 @@ function SearchFoursquare() {
 	url += '&client_secret=Q14U4GKL101NK2EH1M2T4U00FXFSX0M0YH4ZFHXELA3GX2TH';
 	url += '&v=20130815';	
 
-	alert(url);
+	// alert(url);
+
+	$.getJSON(url, {}, function (data) {
+		// notice that the data can be accessed like a multi-dimensional array
+		list = data['response']['venues'];
+		for (var i = 0; i < list.length; i++) {
+			var venue = list[i];
+
+			// create the icon for the map
+			var id = venue['id'];
+			var lat = venue['location']['lat'];
+			var lng = venue['location']['lng'];
+
+			if (venue['categories'].length === 0)
+				continue;
+
+			var category = venue['categories'][0];
+			var path = category['icon'].prefix + "32" + category['icon'].suffix;
+			var newIcon = CreateIcon(path, '');
+
+			var marker = AddMapMarker(id, lat, lng, path, newIcon);
+		
+			var name = venue['name'];
+			var html = '<h2>' + name + '</h2>';
+
+			if (typeof venue['contact']['phone'] != "undefined") {
+				html += '<div class="item"><a href="tel:' + venue['contact']['phone'] + '">' + venue['contact']['formattedPhone'] + '</a></div>';
+			}
+
+			html += '<div class="item">Type: ' + category['shortName'] + '</div>';
+
+			if (typeof venue['menu'] != "undefined") {
+				var menuLink = venue['menu'].url;
+				html += '<div class="item"><a href="' + menuLink + '">View Menu</a></div>';
+			}
+
+			html += SetupTwilioText(id, name);
+
+			marker.bindPopup(html);
+			_group.addLayer(marker);
+
+		}
+
+		SetupTwilioEvents();
+	});
+}
+
+function AddMapMarker(id, lat, lng, path, icon) {
+	var latLng = new L.LatLng(lat, lng);
+	var marker = new L.Marker(latLng, { icon: icon });
+
+	_group.addLayer(marker);
+
+	return marker;
 }
 
 
@@ -102,6 +155,19 @@ function InitLocation(){
 	var gl = navigator.geolocation;
 	gl.getCurrentPosition(geoSuccess, geoError);
 
+}
+
+function CreateIcon(iconPath, className) {
+	var icon = L.icon({
+		iconUrl: iconPath,
+		shadowUrl: null,
+		iconSize: new L.Point(44, 55),
+		//iconAnchor: new L.Point(16, 41),
+		popupAnchor: new L.Point(0, -31),
+		className: className
+	});
+
+	return icon;
 }
 
 function geoSuccess(position) {
@@ -129,5 +195,45 @@ function geoError(err) {
 
 function LoadHomePage(){
 
+}
+
+function SendText(txt, name){
+	$.ajax({
+		url: '/main/sendtext',
+		type: 'POST',
+		data: { text: txt, name: name }
+	}).done(function(data){
+		if (data === null)
+			alert('BAD!');
+		else {
+			$('.txtTextMessage').val('');//resets value of text box to empty
+			$('.leaflet-popup').css('opacity', 0); //make the pop-up invisible
+		}
+	});
+}
+
+function SetupTwilioEvents(){
+	$('body').on('keypress', '.txtTextMessage', function(e){
+		if (e.keyCode == 13) {
+			var txt = $(this).val();
+			var name = $(this).parent().find('.hdnName').val();
+			SendText(txt, name);
+		}
+	});
+
+	$('body').on('click', '.btnSendText', function(){
+		var txt = $(this).parent().find('.txtTextMessage').val();
+		var name = $(this).parent().find('.hdnName').val();
+		SendText(txt, name);
+	});
+}
+
+function SetupTwilioText(id, name){
+	var html = '<input type="hidden" class="hdnID" value="' + id + '" />';
+	html += '<input type="hidden" class="hdnName" value="' + name + '" />';
+	html += '<input type="text" class="txtTextMessage" placeholder="Text your friend!" />';
+	html += '<button class="btnSendText">Send</button>';
+
+	return html;
 }
 
